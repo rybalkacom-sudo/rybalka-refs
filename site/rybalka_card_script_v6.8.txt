@@ -1,0 +1,211 @@
+<script>
+/* Rybalka.ua, сторінка товару. 07-20.11.2026 (v6.8).
+   1) Мобільна (< 768 px): вкладки Доставка/Оплата/Гарантія під однією кнопкою «Оплата і доставка»; таблиця складу набору в описі (і в панелі «Читати повністю») на всю ширину.
+   2) Усі екрани: у блоці «Характеристики» приховати системні рядки (Розділ, Додаткові розділи, Наявність, Ціна, Країна реєстрації бренду);
+      у блоці «Вибір модифікації» приховати параметри з одним варіантом, а якщо таких усі - весь блок;
+      порожній блок «Стислий опис» (товари без короткого опису) приховати.
+   3) Набори 30 шт FOX, набори Assorti і набори по 7 шт (з 18.11, серії «Trapper Assorti», набори по 7 шт - одним блоком «Інші набори по 7 шт» з мініатюрами всіх моделей і довжин; набори по 48 шт (v6.6) - «Інші набори серії Swimmer 8 см, 48 шт» (#S1...) і рядок «Модель»; набори тейл-спіннерів BigEye, TURBO, Jig Tail (v6.7) - рядок «Вага», серія «w:<модель>», 2-е поле - вага в г) тощо): замість чорних кнопок - вибір «Інші набори серії» (мініатюри #1, #2...) і «Довжина» (дані RB_SETS з вивантаження 06-07.11, нові набори - дописати).
+   4) Десктоп: «Переглянуті товари» по ширині сторінки, а не від лівого краю.
+   5) Мобільна: блок «Оплата частинами» в один рядок - текст зліва, логотипи ПриватБанк і monobank справа (кнопки лишаються клікабельними).
+   6) Спінінги (v6.8, 20.11): рядок «Інші моделі FOX Long Rage / FOX Fider Rage / Encore» - кнопки моделей з довжиною і тестом
+      (серія «r:<група>» у RB_SETS: [серія, підпис, довжина м, аліас, тест г, "", в наявності]); на ПК перед кнопкою «Купити». */
+(function(){
+  var HIDE_ROWS=['Розділ','Раздел','Category','Kategoria','Chapitre','Capítulo','Kapitel','Capitolo',
+    'Додаткові розділи','Дополнительные разделы','Additional category','Dodatkowe sekcje','Sections supplémentaires','Secciones adicionales','Zusätzliche Abschnitte','Sezioni aggiuntive',
+    'Наявність','Наличие','Stock','Magazyn',
+    'Ціна','Цена','Price','Cena','Prix','Precio','Preis','Prezzo',
+    'Країна реєстрації бренду','Страна регистрации бренда','Country of brand registration','Kraj rejestracji marki',"Pays d'enregistrement de la marque",'País de registro de marca','Land der Markenregistrierung','Paese di registrazione del marchio'];
+  function cleanFeatures(){
+    var rows=document.querySelectorAll('.product-features__row');
+    for(var i=0;i<rows.length;i++){var h=rows[i].querySelector('.product-features__data--h, .product-features__cell--h'); if(h&&HIDE_ROWS.indexOf(h.textContent.trim())>-1) rows[i].style.display='none';}
+  }
+  function cleanModifications(){
+    var blocks=document.querySelectorAll('.product__block--modifications, .product__section--modifications');
+    for(var b=0;b<blocks.length;b++){
+      var mods=blocks[b].querySelectorAll('.modification'); if(!mods.length) continue;
+      var left=0;
+      for(var i=0;i<mods.length;i++){
+        var n=mods[i].querySelectorAll('.modification__button').length; if(!n) n=mods[i].querySelectorAll('a').length;
+        if(n>1) left++; else mods[i].style.display='none';
+      }
+      if(!left) blocks[b].style.display='none';
+    }
+  }
+  function mobileTabsButton(){
+    if (window.innerWidth >= 768) return;
+    var L={uk:'Оплата і доставка',ru:'Оплата и доставка',en:'Payment and delivery',pl:'Płatność i dostawa',fr:'Paiement et livraison',es:'Pago y envío',de:'Zahlung und Versand',it:'Pagamento e consegna'};
+    var m=location.pathname.match(/^\/(ru|en|pl|fr|es|de|it)\//); var lang=m?m[1]:'uk';
+    var css='.product__group--tabs.rb-pd-hidden{display:none!important}'+
+    '.rb-pd-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;margin:10px 0 0;padding:13px 16px;background:#fff;border:1px solid #d9dee5;border-radius:4px;font:inherit;font-size:15px;font-weight:600;color:#223c5a;text-align:left;cursor:pointer}'+
+    '.rb-pd-toggle:after{content:"";width:9px;height:9px;border-right:2px solid #223c5a;border-bottom:2px solid #223c5a;transform:rotate(45deg);margin:-4px 4px 0 0;transition:transform .2s}'+
+    '.rb-pd-toggle.is-open:after{transform:rotate(-135deg);margin-top:4px}';
+    var g=document.querySelector('.product__group--tabs');
+    if(!g||g.getAttribute('data-rb-toggle')) return;
+    g.setAttribute('data-rb-toggle','1');
+    var st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
+    var b=document.createElement('button'); b.type='button'; b.className='rb-pd-toggle'; b.textContent=L[lang]||L.uk;
+    g.parentNode.insertBefore(b,g); g.classList.add('rb-pd-hidden');
+    b.addEventListener('click',function(){var hidden=g.classList.toggle('rb-pd-hidden'); b.classList.toggle('is-open',!hidden);});
+  }
+  function fixDescTable(){
+    /* Таблиця складу набору (3 комірки з картинками в першому ряду) в описі. Таких таблиць на сторінці дві:
+       в блоці «Опис» і в панелі «Читати повністю» (mmenu, лежить у DOM з самого початку, поза .product-description).
+       У Хорошопа обгортка .text__table має margin 0 -16px і overflow:auto, а таблиця margin 0 16px, display:inline-table,
+       min-width:100% - на телефоні таблиця ширша за екран і третя колонка ріжеться. Тому знаходимо саме наші таблиці,
+       помічаємо класом rb-grid і стилізуємо за класом: обгортка без полів, таблиця на всю ширину, фіксована розкладка,
+       колонки по третині, картинки не ширші за комірку. Інші таблиці в описах не чіпаємо. */
+    if(!document.getElementById('rb-desc-table')){
+      var st=document.createElement('style'); st.id='rb-desc-table';
+      st.textContent='.rb-grid-wrap{margin:0!important;padding:0!important;overflow:visible!important;width:100%!important;max-width:100%!important;background:transparent!important}'+
+        'table.rb-grid{display:table!important;table-layout:fixed!important;margin:0!important;width:100%!important;min-width:0!important;max-width:100%!important;border-collapse:collapse!important}'+
+        'table.rb-grid td{width:33.33%!important;overflow:hidden}'+
+        'table.rb-grid img{display:block;width:100%!important;max-width:100%!important;height:auto!important;margin:0 auto}'+
+        '@media (max-width:767px){table.rb-grid td{padding:4px 2px!important;font-size:12px}}';
+      document.head.appendChild(st);
+    }
+    var tables=document.querySelectorAll('.text__table table:not(.rb-grid)');
+    for(var t=0;t<tables.length;t++){
+      var row=tables[t].rows[0]; if(!row||row.cells.length!==3) continue;
+      var ok=true; for(var c=0;c<3;c++){ if(!row.cells[c].querySelector('img')) ok=false; }
+      if(!ok) continue;
+      tables[t].classList.add('rb-grid');
+      if(tables[t].parentElement&&tables[t].parentElement.classList.contains('text__table')) tables[t].parentElement.classList.add('rb-grid-wrap');
+      var imgs=tables[t].querySelectorAll('img');
+      for(var i=0;i<imgs.length;i++){ imgs[i].removeAttribute('width'); imgs[i].removeAttribute('height'); }
+    }
+  }
+  function hideEmptyShort(){
+    var blocks=document.querySelectorAll('.product__block--shortDescription');
+    for(var i=0;i<blocks.length;i++){ if(!blocks[i].textContent.replace(/\s|\u00a0/g,'')) blocks[i].style.display='none'; }
+  }
+  function compactInstallments(){
+    if (window.innerWidth >= 768) return;
+    var root=document.querySelector('.product__block--installments .product-installments');
+    if(!root||root.getAttribute('data-rb-compact')) return;
+    var btns=root.querySelectorAll('.installments-button'); if(btns.length<2) return;
+    root.setAttribute('data-rb-compact','1');
+    var css='.rb-inst{display:flex;align-items:center;gap:10px;padding:10px 16px}'+
+    '.rb-inst__label{flex:1;font-size:13px;line-height:1.3;color:#333}'+
+    '.rb-inst__label b{display:block;font-weight:600;color:#1a1a1a}'+
+    '.rb-inst .installments-button{padding:0!important;margin:0!important;border:0!important;background:none!important;width:auto!important;min-width:0!important}'+
+    '.rb-inst .installments-button__text-wrap{display:none!important}'+
+    '.rb-inst .installments-button__img-wrap{display:block!important;margin:0!important}'+
+    '.rb-inst .installments-button__icon{height:28px;width:auto;display:block}';
+    var st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
+    var t1=btns[0].querySelector('.installments-button__title'), t2=btns[0].querySelector('.installments-button__text');
+    var wrap=document.createElement('div'); wrap.className='rb-inst';
+    var lab=document.createElement('div'); lab.className='rb-inst__label';
+    var b=document.createElement('b'); b.textContent=t1?t1.textContent.trim():''; lab.appendChild(b); lab.appendChild(document.createTextNode(t2?t2.textContent.trim():''));
+    wrap.appendChild(lab);
+    for(var i=0;i<btns.length;i++) wrap.appendChild(btns[i]);
+    root.innerHTML=''; root.appendChild(wrap);
+  }
+var RB_SETS=[["Abyss",7,1,"nabir-vibrokhvostiv-fox-abyss-7-sm-1-30-sht",10,"51113989855468",1],["Abyss",7,2,"nabir-vibrokhvostiv-fox-abyss-7-sm-2-30-sht",11,"17739483842637",1],["Abyss",9,1,"nabor-sylykonovykh-prymanok-1-fox-abyss-90-mm-30-sht",26,"nabor-sylykonovykh-prymanok-1-fox-abyss-90-mm-30-sht-28288175387994",1],["Abyss",9,2,"nabor-sylykonovykh-prymanok-2-fox-abyss-90-mm-30-sht",24,"nabor-sylykonovykh-prymanok-2-fox-abyss-90-mm-30-sht-36946577768739",1],["Abyss",9,3,"nabor-sylykonovykh-prymanok-3-fox-abyss-90-mm-30-sht",25,"nabor-sylykonovykh-prymanok-3-fox-abyss-90-mm-30-sht-69079527868485",1],["Abyss",9,4,"nabor-sylykonovykh-prymanok-4-fox-abyss-90-mm-30-sht",27,"nabor-sylykonovykh-prymanok-4-fox-abyss-90-mm-30-sht-71763576078867",1],["Abyss",9,5,"nabir-vibrokhvostiv-fox-abyss-9-sm-5-30-sht",35,"nabir-vibrokhvostiv-fox-abyss-9-sm-5-30-sht-49780257477548",1],["Abyss",9,6,"nabir-vibrokhvostiv-fox-abyss-9-sm-6-30-sht",36,"nabir-vibrokhvostiv-fox-abyss-9-sm-6-30-sht-72709683288444",1],["Abyss",9,7,"nabir-vibrokhvostiv-fox-abyss-9-sm-7-30-sht",37,"nabir-vibrokhvostiv-fox-abyss-9-sm-7-30-sht-93198752106503",1],["Abyss",9,8,"nabir-vibrokhvostiv-fox-abyss-9-sm-8-30-sht",38,"nabir-vibrokhvostiv-fox-abyss-9-sm-8-30-sht-48090794228193",1],["Gloom",6,1,"nabor-sylykonovykh-prymanok-1-fox-gloom-60-mm-30-sht",30,"96462223581465",1],["Gloom",6,2,"nabor-sylykonovykh-prymanok-2-fox-gloom-60-mm-30-sht",29,"22701261865868",1],["Gloom",6,3,"nabir-vibrokhvostiv-fox-gloom-6-sm-3-30-sht",5,"12052433284899",1],["Gloom",6,4,"nabir-vibrokhvostiv-fox-gloom-6-sm-4-30-sht",6,"61523527982378",1],["Gloom",6,5,"nabir-vibrokhvostiv-fox-gloom-6-sm-5-30-sht",7,"77033261825237",1],["Gloom",6,6,"nabir-vibrokhvostiv-fox-gloom-6-sm-6-30-sht",8,"95497754335576",1],["Gloom",6,7,"nabir-vibrokhvostiv-fox-gloom-6-sm-7-30-sht",9,"25529748194087",1],["Gloom",8,1,"nabor-sylykonovykh-prymanok-1-fox-gloom-80-mm-30-sht",28,"nabor-sylykonovykh-prymanok-1-fox-gloom-80-mm-30-sht-68865393830413",1],["Gloom",8,2,"nabor-sylykonovykh-prymanok-2-fox-gloom-80-mm-30-sht",32,"nabor-sylykonovykh-prymanok-2-fox-gloom-80-mm-30-sht-71197227637990",1],["Gloom",8,3,"nabor-sylykonovykh-prymanok-3-fox-gloom-80-mm-30-sht",31,"nabor-sylykonovykh-prymanok-3-fox-gloom-80-mm-30-sht-24695716091572",1],["Gloom",8,4,"nabor-sylykonovykh-prymanok-4-fox-gloom-80-mm-30-sht",33,"nabor-sylykonovykh-prymanok-4-fox-gloom-80-mm-30-sht-90742729537676",1],["Gloom",8,5,"nabir-vibrokhvostiv-fox-gloom-8-sm-5-30-sht",44,"nabir-vibrokhvostiv-fox-gloom-8-sm-5-30-sht-48895997822750",1],["Gloom",8,6,"nabir-vibrokhvostiv-fox-gloom-8-sm-6-30-sht",45,"nabir-vibrokhvostiv-fox-gloom-8-sm-6-30-sht-85612468084638",1],["Gloom",8,7,"nabir-vibrokhvostiv-fox-gloom-8-sm-7-30-sht",46,"nabir-vibrokhvostiv-fox-gloom-8-sm-7-30-sht-78480090845907",1],["Gloom",8,8,"nabir-vibrokhvostiv-fox-gloom-8-sm-8-30-sht",47,"nabir-vibrokhvostiv-fox-gloom-8-sm-8-30-sht-96877313958412",1],["Gloom",8,9,"nabir-vibrokhvostiv-fox-gloom-8-sm-9-30-sht",48,"nabir-vibrokhvostiv-fox-gloom-8-sm-9-30-sht-41320936832874",1],["Swimmer",6,1,"nabor-sylykonovykh-prymanok-1-fox-swimmer-60-mm-30-sht",39,"72915417543687",1],["Swimmer",6,2,"nabor-sylykonovykh-prymanok-2-fox-swimmer-60-mm-30-sht",36,"40890842036471",0],["Swimmer",6,3,"nabir-vibrokhvostiv-fox-swimmer-6-sm-3-30-sht",1,"50609374551988",1],["Swimmer",6,4,"nabir-vibrokhvostiv-fox-swimmer-6-sm-4-30-sht",2,"67174428729300",1],["Swimmer",6,5,"nabir-vibrokhvostiv-fox-swimmer-6-sm-5-30-sht",3,"91140300477877",1],["Swimmer",6,6,"nabir-vibrokhvostiv-fox-swimmer-6-sm-6-30-sht",4,"45709373070753",1],["Swimmer",8,1,"nabor-sylykonovykh-prymanok-1-fox-swimmer-80-mm-30-sht",37,"nabor-sylykonovykh-prymanok-1-fox-swimmer-80-mm-30-sht-67235328533054",1],["Swimmer",8,2,"nabor-sylykonovykh-prymanok-2-fox-swimmer-80-mm-30-sht",38,"nabor-sylykonovykh-prymanok-2-fox-swimmer-80-mm-30-sht-86901327983262",1],["Swimmer",8,3,"nabor-sylykonovykh-prymanok-3-fox-swimmer-80-mm-30-sht",35,"nabor-sylykonovykh-prymanok-3-fox-swimmer-80-mm-30-sht-89087444783811",1],["Swimmer",8,4,"nabor-sylykonovykh-prymanok-4-fox-swimmer-80-mm-30-sht",34,"nabor-sylykonovykh-prymanok-4-fox-swimmer-80-mm-30-sht-41886846865026",1],["Swimmer",8,5,"nabir-vibrokhvostiv-fox-swimmer-8-sm-5-30-sht",39,"nabir-vibrokhvostiv-fox-swimmer-8-sm-5-30-sht-46619885643455",1],["Swimmer",8,6,"nabir-vibrokhvostiv-fox-swimmer-8-sm-6-30-sht",40,"nabir-vibrokhvostiv-fox-swimmer-8-sm-6-30-sht-34624201766902",1],["Swimmer",8,7,"nabir-vibrokhvostiv-fox-swimmer-8-sm-7-30-sht",41,"nabir-vibrokhvostiv-fox-swimmer-8-sm-7-30-sht-68206250205259",1],["Swimmer",8,8,"nabir-vibrokhvostiv-fox-swimmer-8-sm-8-30-sht",42,"nabir-vibrokhvostiv-fox-swimmer-8-sm-8-30-sht-44471672623993",1],["Swimmer",8,9,"nabir-vibrokhvostiv-fox-swimmer-8-sm-9-30-sht",43,"nabir-vibrokhvostiv-fox-swimmer-8-sm-9-30-sht-51343271877290",1],["Trapper",6,1,"nabor-sylykonovykh-prymanok-1-fox-trapper-60-mm-30-sht",22,"66343776116370",1],["Trapper",6,2,"nabor-sylykonovykh-prymanok-2-fox-trapper-60-mm-30-sht",23,"28745950436816",1],["Trapper",6,3,"nabir-vibrokhvostiv-fox-trapper-6-sm-3-30-sht",49,"61833661911755",1],["Trapper",6,4,"nabir-vibrokhvostiv-fox-trapper-6-sm-4-30-sht",50,"75601716051495",1],["Trapper",8,1,"nabor-sylykonovykh-prymanok-1-fox-trapper-80-mm-30-sht",20,"nabor-sylykonovykh-prymanok-1-fox-trapper-80-mm-30-sht-79143404503875",1],["Trapper",8,2,"nabor-sylykonovykh-prymanok-2-fox-trapper-80-mm-30-sht",21,"nabor-sylykonovykh-prymanok-2-fox-trapper-80-mm-30-sht-69433329157644",1],["Trapper",8,3,"nabor-sylykonovykh-prymanok-3-fox-trapper-80-mm-30-sht",18,"nabor-sylykonovykh-prymanok-3-fox-trapper-80-mm-30-sht-13376391734605",1],["Trapper",8,4,"nabor-sylykonovykh-prymanok-4-fox-trapper-80-mm-30-sht",19,"nabor-sylykonovykh-prymanok-4-fox-trapper-80-mm-30-sht-64941686208797",1],["Trapper",8,5,"nabir-vibrokhvostiv-fox-trapper-8-sm-5-30-sht",31,"nabir-vibrokhvostiv-fox-trapper-8-sm-5-30-sht-18980407599512",1],["Trapper",8,6,"nabir-vibrokhvostiv-fox-trapper-8-sm-6-30-sht",32,"nabir-vibrokhvostiv-fox-trapper-8-sm-6-30-sht-44302106981295",1],["Trapper",8,7,"nabir-vibrokhvostiv-fox-trapper-8-sm-7-30-sht",33,"nabir-vibrokhvostiv-fox-trapper-8-sm-7-30-sht-38608574108230",1],["Trapper",8,8,"nabir-vibrokhvostiv-fox-trapper-8-sm-8-30-sht",34,"nabir-vibrokhvostiv-fox-trapper-8-sm-8-30-sht-13980918775719",1],["Trapper Assorti",8,5,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-trapper-assorti-5-sedobnye-10sht",17,"40009491585196",1],["Trapper Assorti",8,6,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-trapper-assorti-6-sedobnye-10sht",18,"90413153185136",1],["Trapper Assorti",8,7,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-trapper-assorti-7-sedobnye-10sht",22,"15755022291788",1],["Swimmer Assorti",8,5,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-swimmer-assorti-5-sedobnye-10sht",19,"66938112514582",1],["Swimmer Assorti",8,6,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-swimmer-assorti-6-sedobnye-10sht",49,"28399741735607",1],["Swimmer Assorti",8,7,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-swimmer-assorti-7-sedobnye-10sht",20,"61894190110620",1],["Gloom Assorti",8,5,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-gloom-assorti-5-sedobnye-10sht",47,"69748611419437",1],["Gloom Assorti",8,6,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-gloom-assorti-6-sedobnye-10sht",4,"97728793448412",1],["Gloom Assorti",8,7,"nabor-sylykonovykh-vybrokhvostov-fox-8sm-gloom-assorti-7-sedobnye-10sht",3,"28688928029141",1],["Trapper Assorti",10,1,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-trapper-assorti-1-sedobnye-5sht",24,"56766783645146",1],["Trapper Assorti",10,2,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-trapper-assorti-2-sedobnye-5sht",23,"30779802515363",1],["Trapper Assorti",10,3,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-trapper-assorti-3-sedobnye-5sht",25,"22164679736956",1],["Trapper Assorti",10,4,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-trapper-assorti-4-sedobnye-5sht",21,"99895023775931",1],["Swimmer Assorti",10,1,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-swimmer-assorti-1-sedobnye-5sht",2,"89037200582972",1],["Swimmer Assorti",10,2,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-swimmer-assorti-2-sedobnye-5sht",48,"43663260813164",1],["Swimmer Assorti",10,3,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-swimmer-assorti-3-sedobnye-5sht",16,"19430869555943",1],["Swimmer Assorti",10,4,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-swimmer-assorti-4-sedobnye-5sht",50,"61220370803454",1],["Gloom Assorti",10,1,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-gloom-assorti-1-sedobnye-5sht",1,"14984337349744",1],["Gloom Assorti",10,2,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-gloom-assorti-2-sedobnye-5sht",45,"37194922837796",1],["Gloom Assorti",10,3,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-gloom-assorti-3-sedobnye-5sht",46,"38637304225869",1],["Gloom Assorti",10,4,"nabor-sylykonovykh-vybrokhvostov-fox-10sm-gloom-assorti-4-sedobnye-5sht",5,"31756654128028",1],["7pcs",12,1,"nabor-sylykonovykh-vybrokhvostov-fox-swimmer-120-mm-7-sht",39,"76023052401913",1,"Swimmer"],["7pcs",14,2,"nabor-sylykonovykh-vybrokhvostov-fox-swimmer-140-mm-7-sht",40,"18572881549333",1,"Swimmer"],["7pcs",12,3,"nabor-sylykonovykh-vybrokhvostov-fox-trapper-120-mm-7-sht",41,"65303084743278",1,"Trapper"],["48pcs",8,"S1","nabor-sylykona-fox-swimmer-8-sm-s1-6-tsvetov-kh-8-sht-48-sht",6,"45501461860742",0,"Swimmer"],["48pcs",8,"S2","nabor-sylykona-fox-swimmer-8-sm-s2-6-tsvetov-kh-8-sht-48-sht",7,"89047412413791",0,"Swimmer"],["48pcs",8,"S3","nabor-sylykona-fox-swimmer-8-sm-s3-6-tsvetov-kh-8-sht-48-sht",8,"73280718192476",0,"Swimmer"],["48pcs",8,"S4","nabor-sylykona-fox-swimmer-8-sm-s4-6-tsvetov-kh-8-sht-48-sht",9,"91668017120203",0,"Swimmer"],["48pcs",8,"S5","nabor-sylykona-fox-swimmer-8-sm-s5-6-tsvetov-kh-8-sht-48-sht",10,"26063159087612",0,"Swimmer"],["48pcs",8,"S6","nabor-sylykona-fox-swimmer-8-sm-s6-6-tsvetov-kh-8-sht-48-sht",11,"37084237673088",0,"Swimmer"],["48pcs",8,"G1","nabor-sylykona-fox-gloom-8-sm-g1-6-tsvetov-kh-8-sht-48-sht",12,"38136133911596",0,"Gloom"],["48pcs",8,"G2","nabor-sylykona-fox-gloom-8-sm-g2-6-tsvetov-kh-8-sht-48-sht",13,"99358503227475",0,"Gloom"],["48pcs",8,"G3","nabor-sylykona-fox-gloom-8-sm-g3-6-tsvetov-kh-8-sht-48-sht",14,"63430795943177",0,"Gloom"],["48pcs",8,"G4","nabor-sylykona-fox-gloom-8-sm-g4-6-tsvetov-kh-8-sht-48-sht",15,"43789328525879",0,"Gloom"],["48pcs",9,"A1","nabor-sylykona-fox-abyss-9-sm-a1-6-tsvetov-kh-8-sht-48-sht",27,"79828438706641",0,"Abyss"],["48pcs",9,"A2","nabor-sylykona-fox-abyss-9-sm-a2-6-tsvetov-kh-8-sht-48-sht",28,"76709902471067",0,"Abyss"],["48pcs",9,"A3","nabor-sylykona-fox-abyss-9-sm-a3-6-tsvetov-kh-8-sht-48-sht",29,"51983736591207",0,"Abyss"],["48pcs",9,"A4","nabor-sylykona-fox-abyss-9-sm-a4-6-tsvetov-kh-8-sht-48-sht",30,"88210470834704",0,"Abyss"],["48pcs",9,"A5","nabor-sylykona-fox-abyss-9-sm-a5-6-tsvetov-kh-8-sht-48-sht",31,"60053146770984",0,"Abyss"],["48pcs",8,"T1","nabor-sylykona-fox-trapper-8-sm-t1-6-tsvetov-kh-8-sht-48-sht",32,"67770022302076",0,"Trapper"],["48pcs",8,"T2","nabor-sylykona-fox-trapper-8-sm-t2-6-tsvetov-kh-8-sht-48-sht",33,"54389181758418",0,"Trapper"],["48pcs",8,"T3","nabor-sylykona-fox-trapper-8-sm-t3-6-tsvetov-kh-8-sht-48-sht",34,"36687026798391",0,"Trapper"],["48pcs",8,"T4","nabor-sylykona-fox-trapper-8-sm-t4-6-tsvetov-kh-8-sht-48-sht",35,"91288282172327",0,"Trapper"],["48pcs",8,"T5","nabor-sylykona-fox-trapper-8-sm-t5-6-tsvetov-kh-8-sht-48-sht",36,"37560589687705",0,"Trapper"],["48pcs",8,"T6","nabor-sylykona-fox-trapper-8-sm-t6-6-tsvetov-kh-8-sht-48-sht",37,"87919768877729",0,"Trapper"],["w:BigEye",6,1,"nabir-teil-spinneriv-fox-bigeye-tail-spinner-kit-6g-5-sht-prymanok-korobka",0,"",1],["w:BigEye",10,1,"nabir-teil-spinneriv-fox-bigeye-tail-spinner-kit-10g-5-sht-prymanok-korobka",0,"",1],["w:TURBO",7,1,"nabir-teil-spinneriv-fox-turbo-tail-spinner-kit-7g-5-sht-prymanok-korobka",0,"",1],["w:TURBO",10,1,"nabir-teil-spinneriv-fox-turbo-tail-spinner-kit-10g-5-sht-prymanok-korobka",0,"",1],["w:JigTail",7,1,"nabir-teil-spinneriv-fox-jig-tail-spinner-kit-7g-5-sht-prymanok-korobka",0,"",1],["w:JigTail",9,1,"nabir-teil-spinneriv-fox-jig-tail-spinner-kit-9g-5-sht-prymanok-korobka",0,"",1],["w:JigTail",11,1,"nabir-teil-spinneriv-fox-jig-tail-spinner-kit-11g-5-sht-prymanok-korobka",0,"",1],["w:JigTail",14,1,"nabir-teil-spinneriv-fox-jig-tail-spinner-kit-14g-5-sht-prymanok-korobka",0,"",1],["w:JigTail",16,1,"nabir-teil-spinneriv-fox-jig-tail-spinner-kit-16g-5-sht-prymanok-korobka",0,"",1],["w:JigTail",21,1,"nabir-teil-spinneriv-fox-jig-tail-spinner-kit-21g-5-sht-prymanok-korobka",0,"",1],["r:FOX Long Rage","ML 7'",2.13,"copy_spininh-fox-long-rage-ml-7-fast-2.13m-3-18h","3-18","",1],["r:FOX Long Rage","UL 8'",2.41,"spininh-fox-long-rage-ul-8-fast-2.41m-3-12h","3-12","",1],["r:FOX Long Rage","UL 9'",2.72,"spininh-fox-long-rage-ul-9-fast-2.72m-3-12h","3-12","",1],["r:FOX Long Rage","XT 8'",2.41,"spininh-fox-long-rage-xt-8-fast-2.41m-6-21h","6-21","",1],["r:FOX Long Rage","XT 9'",2.72,"spininh-fox-long-rage-xt-9-fast-2.72m-6-21h","6-21","",1],["r:FOX Fider Rage","10'",3.05,"spininh-fox-fider-rage-10-m-3.05m-30-100h","30-100","",1],["r:FOX Fider Rage","11'",3.36,"spininh-fox-fider-rage-11-m-3.36m-30-100h","30-100","",1],["r:FOX Fider Rage","12'",3.67,"spininh-fox-fider-rage-12-m-3.67m-75-125h","75-125","",1],["r:Encore","Flayer FLS-692ML",2.06,"spininh-encore-flayer-se-fls-692ml-2.06m-5-21h","5-21","",1],["r:Encore","Flayer FLS-692MH",2.06,"spininh-encore-flayer-se-fls-692mh-2.06m-7-32h","7-32","",1],["r:Encore","Flayer FLS-702H",2.13,"spininh-encore-flayer-se-fls-702h-2.13m-10-42h","10-42","",1],["r:Encore","Nemesis NMS-732L",2.21,"spininh-encore-nemesis-se-nms-732l-2.21m-3-10h","3-10","",1],["r:Encore","Nemesis Viator NMSV-S764L",2.29,"spininh-encore-nemesis-viator-se-nmsv-s764l-4-kh-chastynnyi.-tubus-2.29m-3-12h","3-12","",1],["r:Encore","Sentence STS-742M",2.24,"spininh-encore-sentence-se-sts-742m-2.24m-7-21h","7-21","",1]];
+  function seriesChooser(){
+    if(document.querySelector('.rb-series')) return;
+    var m=location.pathname.match(/^\/(?:(ru|en|pl|fr|es|de|it)\/)?([^\/]+)\/?$/); if(!m) return;
+    var lang=m[1]||'uk', pre=m[1]?'/'+m[1]+'/':'/', alias=m[2], cur=null, i;
+    for(i=0;i<RB_SETS.length;i++){ if(RB_SETS[i][3]===alias){cur=RB_SETS[i];break;} }
+    if(!cur) return;
+    if(cur[0].indexOf('r:')===0){ rodRow(cur,lang,pre); return; } /* v6.8: спінінги */
+    var p48=cur[0]==='48pcs', wm=cur[0].indexOf('w:')===0, grp=!p48&&cur.length>7; /* wm: вибір ваги (тейл-спіннери) замість довжини */
+    var TWU={uk:['Вага','г'],ru:['Вес','г'],en:['Weight','g'],pl:['Waga','g'],fr:['Poids','g'],es:['Peso','g'],de:['Gewicht','g'],it:['Peso','g']}[lang]; /* p48: набори по 48 шт, r[7] - модель, r[2] - номер S1/G1/A1/T1 */
+    var P48={uk:['шт','Модель'],ru:['шт','Модель'],en:['pcs','Model'],pl:['szt.','Model'],fr:['pcs','Modèle'],es:['uds.','Modelo'],de:['Stück','Modell'],it:['pz','Modello']}[lang], mods=[]; /* група різних моделей і довжин (набори по 7 шт): r[7] - модель */
+    var TG={uk:'Інші набори по 7 шт',ru:'Другие наборы по 7 шт',en:'Other 7-piece sets',pl:'Inne zestawy po 7 szt.',fr:'Autres kits de 7 pièces',es:'Otros sets de 7 piezas',de:'Weitere 7er-Sets',it:'Altri set da 7 pezzi'}[lang];
+    var T={uk:['Інші набори серії','Довжина','см'],ru:['Другие наборы серии','Длина','см'],en:['Other sets in the series','Length','cm'],pl:['Inne zestawy z serii','Długość','cm'],fr:['Autres kits de la série','Longueur','cm'],es:['Otros sets de la serie','Longitud','cm'],de:['Weitere Sets der Serie','Länge','cm'],it:['Altri set della serie','Lunghezza','cm']}[lang];
+    var same=[], lens={};
+    for(i=0;i<RB_SETS.length;i++){ var r=RB_SETS[i]; if(r[0]!==cur[0]) continue; if(p48){ if(r[7]===cur[7]) same.push(r); if(!mods.some(function(q){return q[7]===r[7];})) mods.push(r[7]===cur[7]?cur:r); continue; } if(grp){ same.push(r); continue; } if(r[1]===cur[1]) same.push(r); if(!lens[r[1]]||(r[2]===cur[2])||(lens[r[1]][2]!==cur[2]&&r[2]<lens[r[1]][2])) lens[r[1]]=r; }
+    if(same.length<2&&Object.keys(lens).length<2&&mods.length<2) return;
+    if(!document.getElementById('rb-series-css')){
+      var st=document.createElement('style'); st.id='rb-series-css';
+      st.textContent='.rb-series{margin:14px 0 4px}.rb-series__t{font-size:14px;font-weight:600;color:#1a1a1a;margin:0 0 8px}.rb-series__t span{font-weight:400;color:#666}'+
+      '.rb-series__row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}'+
+      '.rb-series__it{display:flex;flex-direction:column;align-items:center;width:62px;text-decoration:none!important;color:#333;font-size:12px;line-height:1.2}'+
+      '.rb-series__it img{width:62px;height:62px;object-fit:cover;border:2px solid #e3e3e3;border-radius:4px;background:#fff;display:block;margin-bottom:3px}'+
+      '.rb-series__it:hover img{border-color:#9aa8b8}.rb-series__it.is-cur img{border-color:#001E42}.rb-series__it.is-cur{font-weight:700;color:#001E42}'+
+      '.rb-series__it.is-out img{opacity:.45}'+
+      '.rb-series__len{display:inline-flex;align-items:center;justify-content:center;min-width:58px;height:34px;padding:0 12px;border:1px solid #c9d1db;border-radius:4px;background:#fff;color:#223c5a!important;font-size:14px;text-decoration:none!important}'+
+      '.rb-series__len.is-cur{border:2px solid #001E42;font-weight:700;color:#001E42!important}'+
+      '.rb-series--m{margin:12px 0 2px!important}.rb-series--m .rb-series__row{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;padding-bottom:2px}.rb-series--m .rb-series__it,.rb-series--m .rb-series__len{flex:0 0 auto}.rb-series--m .rb-series__len{height:32px}.rb-series--m .rb-series__row{scrollbar-width:none}.rb-series--m .rb-series__row::-webkit-scrollbar{display:none}'+
+      '@media (max-width:767px){.rb-series{margin:12px 0 0}.rb-series__it,.rb-series__it img{width:54px}.rb-series__it img{height:54px}}'+
+      '.rb-series__it--w{width:78px;text-align:center}.rb-series__it--w img{width:78px;height:62px}@media (max-width:767px){.rb-series__it--w,.rb-series__it--w img{width:70px}.rb-series__it--w img{height:54px}}';
+      document.head.appendChild(st);
+    }
+    var box=document.createElement('div'); box.className='rb-series';
+    var h='';
+    if(same.length>1){
+      h+='<div class="rb-series__t">'+(grp?TG:T[0]+' <span>'+(p48?cur[7]:cur[0])+' '+cur[1]+' '+T[2]+(p48?', 48 '+P48[0]:'')+'</span>')+'</div><div class="rb-series__row">';
+      for(i=0;i<same.length;i++){ var r=same[i];
+        var lab=grp?r[7]+' '+r[1]+' '+T[2]:'#'+r[2];
+        h+='<a class="rb-series__it'+(grp?' rb-series__it--w':'')+(r===cur?' is-cur':'')+(r[6]?'':' is-out')+'" href="'+pre+r[3]+'/" title="'+(grp?'FOX '+lab:(p48?r[7]:r[0])+' '+r[1]+' '+T[2]+' #'+r[2])+'"><img loading="lazy" alt="'+lab+'" src="/content/images/'+r[4]+'/120x120l80mc0/'+r[5]+'.webp">'+(grp?r[7]+'<br>'+r[1]+' '+T[2]:lab)+'</a>'; }
+      h+='</div>';
+    }
+    var ls=Object.keys(lens).map(Number).sort(function(a,b){return a-b;});
+    if(ls.length>1){
+      h+='<div class="rb-series__t">'+(wm?TWU[0]:T[1])+'</div><div class="rb-series__row">';
+      for(i=0;i<ls.length;i++){ var q=lens[ls[i]]; h+='<a class="rb-series__len'+(ls[i]===cur[1]?' is-cur':'')+'" href="'+pre+q[3]+'/">'+ls[i]+' '+(wm?TWU[1]:T[2])+'</a>'; }
+      h+='</div>';
+    }
+    if(mods.length>1){
+      h+='<div class="rb-series__t">'+P48[1]+'</div><div class="rb-series__row">';
+      for(i=0;i<mods.length;i++){ var q=mods[i]; h+='<a class="rb-series__len'+(q[7]===cur[7]?' is-cur':'')+'" href="'+pre+q[3]+'/">'+q[7]+' '+q[1]+' '+T[2]+'</a>'; }
+      h+='</div>';
+    }
+    box.innerHTML=h;
+    /* мобільна розмітка: у картці з ціною, після опту і перед кнопкою «Купити»; мініатюри в один ряд з прокруткою */
+    var ob=document.querySelector('.product__block--orderBox .product-card__order-box');
+    if(ob){
+      box.className='rb-series rb-series--m'; ob.parentNode.insertBefore(box,ob);
+      var row=box.querySelector('.rb-series__row'), c=box.querySelector('.rb-series__it.is-cur');
+      if(row&&c) row.scrollLeft=Math.max(0,c.offsetLeft-row.offsetLeft-(row.clientWidth-c.offsetWidth)/2);
+      return;
+    }
+    var anchor=document.querySelector('.product__section--modifications')||document.querySelector('.product__block--modifications');
+    if(anchor){ anchor.parentNode.insertBefore(box,anchor); return; }
+    var w=document.querySelector('.product__block--wholesale-prices, .fox-mobile-wholesale');
+    if(w&&w.parentNode) w.parentNode.insertBefore(box,w.nextSibling);
+  }
+  function rodRow(cur,lang,pre){
+    var U={uk:['Інші моделі','м','г'],ru:['Другие модели','м','г'],en:['Other models','m','g'],pl:['Inne modele','m','g'],fr:['Autres modèles','m','g'],es:['Otros modelos','m','g'],de:['Weitere Modelle','m','g'],it:['Altri modelli','m','g']}[lang];
+    var list=[],i; for(i=0;i<RB_SETS.length;i++){ if(RB_SETS[i][0]===cur[0]) list.push(RB_SETS[i]); }
+    if(list.length<2) return;
+    if(!document.getElementById('rb-rod-css')){
+      var st=document.createElement('style'); st.id='rb-rod-css';
+      st.textContent='.rb-series{margin:14px 0 4px}.rb-series__t{font-size:14px;font-weight:600;color:#1a1a1a;margin:0 0 8px}.rb-series__t span{font-weight:400;color:#666}'+
+      '.rb-series__row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}'+
+      '.rb-rod{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:92px;padding:6px 10px;border:1px solid #c9d1db;border-radius:4px;background:#fff;color:#223c5a!important;font-size:14px;line-height:1.25;text-decoration:none!important;text-align:center}'+
+      '.rb-rod small{display:block;font-size:12px;font-weight:400;color:#6b7785;margin-top:2px}.rb-rod:hover{border-color:#9aa8b8}'+
+      '.rb-rod.is-cur{border:2px solid #001E42;padding:5px 9px;font-weight:700;color:#001E42!important}.rb-rod.is-out{opacity:.5}'+
+      '.rb-series--m{margin:12px 0 2px!important}.rb-series--m .rb-series__row{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:10px;padding-bottom:2px}.rb-series--m .rb-series__row::-webkit-scrollbar{display:none}.rb-series--m .rb-rod{flex:0 0 auto}';
+      document.head.appendChild(st);
+    }
+    var h='<div class="rb-series__t">'+U[0]+' <span>'+cur[0].slice(2)+'</span></div><div class="rb-series__row">';
+    for(i=0;i<list.length;i++){ var r=list[i], L=r[2].toFixed(2); if(lang!=='en') L=L.replace('.',',');
+      h+='<a class="rb-rod'+(r===cur?' is-cur':'')+(r[6]?'':' is-out')+'" href="'+pre+r[3]+'/">'+r[1]+'<small>'+L+' '+U[1]+' \u00b7 '+r[4]+' '+U[2]+'</small></a>'; }
+    h+='</div>';
+    var box=document.createElement('div'); box.className='rb-series rb-series--rod'; box.innerHTML=h;
+    var ob=document.querySelector('.product__block--orderBox .product-card__order-box');
+    if(ob){
+      box.className='rb-series rb-series--rod rb-series--m'; ob.parentNode.insertBefore(box,ob);
+      var row=box.querySelector('.rb-series__row'), c=box.querySelector('.rb-rod.is-cur');
+      if(row&&c) row.scrollLeft=Math.max(0,c.offsetLeft-row.offsetLeft-(row.clientWidth-c.offsetWidth)/2);
+      return;
+    }
+    var od=document.querySelector('.product__section--order');
+    if(od&&od.parentNode){ od.parentNode.insertBefore(box,od); return; }
+    var w=document.querySelector('.product__block--wholesale-prices, .fox-mobile-wholesale');
+    if(w&&w.parentNode) w.parentNode.insertBefore(box,w.nextSibling);
+  }
+  function wideFix(){
+    if(document.getElementById('rb-wide-fix')) return;
+    var st=document.createElement('style'); st.id='rb-wide-fix';
+    st.textContent='@media (min-width:768px){.product__bottom-wide>.product__bottom-item{max-width:1440px;margin-left:auto;margin-right:auto}}';
+    document.head.appendChild(st);
+  }
+  function init(){ try{fixDescTable();}catch(e){} try{cleanFeatures();}catch(e){} try{cleanModifications();}catch(e){} try{hideEmptyShort();}catch(e){} try{mobileTabsButton();}catch(e){} try{compactInstallments();}catch(e){} try{seriesChooser();}catch(e){} try{wideFix();}catch(e){} }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+  /* панель «Читати повністю» і галерея можуть перебудовуватися скриптами Хорошопа - ще раз помічаємо таблиці */
+  setTimeout(function(){ try{fixDescTable();}catch(e){} },1500);
+  try{ var rbT=null; new MutationObserver(function(){ clearTimeout(rbT); rbT=setTimeout(function(){ try{fixDescTable();}catch(e){} },200); }).observe(document.body,{childList:true,subtree:true}); }catch(e){}
+})();
+</script>
