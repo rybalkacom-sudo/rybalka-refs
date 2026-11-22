@@ -1,0 +1,13 @@
+<script>
+/* Rybalka.ua: ціни без нульових копійок, v1.0 (22.11.2026). 399.0 грн -> 399 грн. Відкат: вимкнути цей сервіс. */
+(function(){
+if(window.__rbPriceTrim)return;window.__rbPriceTrim=1;
+var A=/(\d)[.,]0{1,2}(?=\s*(?:грн|₴|zł|€|\$|UAH|EUR|USD|PLN))/g;
+var B=/((?:\$|€|₴)\s*\d[\d\s]*)[.,]0{1,2}(?!\d)/g;
+var SKIP={SCRIPT:1,STYLE:1,TEXTAREA:1,NOSCRIPT:1,CODE:1,PRE:1};
+function txt(n){var v=n.nodeValue;if(!v||v.length>200||!/\d[.,]0/.test(v))return;var r=v.replace(A,'$1').replace(B,'$1');if(r!==v)n.nodeValue=r;}
+function walk(root){if(!root)return;if(root.nodeType===3){var p=root.parentNode;if(p&&!SKIP[p.nodeName])txt(root);return;}if(root.nodeType!==1||SKIP[root.nodeName])return;var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null,false),n,a=[];while((n=w.nextNode()))a.push(n);for(var i=0;i<a.length;i++){var q=a[i].parentNode;if(q&&!SKIP[q.nodeName])txt(a[i]);}}
+function start(){walk(document.body);try{new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i];if(m.type==='characterData'){walk(m.target);}else{for(var j=0;j<m.addedNodes.length;j++)walk(m.addedNodes[j]);}}}).observe(document.body,{childList:true,subtree:true,characterData:true});}catch(e){}}
+if(document.body)start();else document.addEventListener('DOMContentLoaded',start);
+})();
+</script>
